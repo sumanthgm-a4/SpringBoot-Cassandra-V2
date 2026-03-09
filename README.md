@@ -1,6 +1,6 @@
 # Spring Boot + Cassandra (Docker) – Simple Setup Guide
 
-## 1. Running Cassandra with Docker Compose
+# 1. Running Cassandra with Docker Compose
 
 Cassandra is started using a Docker Compose service. The container exposes **port 9042**, which is Cassandra's native CQL port used by clients like Spring Boot.
 
