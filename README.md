@@ -124,20 +124,145 @@ Because the object contains nested structures (lists, maps, and other objects), 
 
 # 6. Serialization and Deserialization Flow
 
+Below are three possible approaches for storing complex nested objects like `EventRecord` in Cassandra.
+
+---
+
+## Scenario 1: Plain String (Manual JSON Serialization)
+
 ### Saving Data
 
 1. The application receives an `EventRecord` object.
-2. The object is converted into a **JSON tree** using Jackson.
-3. The JSON is converted to a **formatted string**.
-4. That string is stored in the `session_data` column.
+2. Jackson converts the `EventRecord` POJO into a **JSON string** using `ObjectMapper`.
+3. The resulting JSON string is stored directly in a Cassandra `text` column (for example: `session_data`).
+
+Example concept:
+
+EventRecord POJO  
+↓  
+Jackson ObjectMapper  
+↓  
+JSON String  
+↓  
+Stored in Cassandra TEXT column
+
+### Retrieving Data
+
+1. The JSON string is fetched from Cassandra.
+2. Jackson `ObjectMapper.readValue()` converts the string back into an `EventRecord` POJO.
+
+This approach keeps Cassandra schema very simple but pushes all structure handling to the application.
+
+---
+
+## Scenario 2: Using `JsonNode` in the Backend
+
+In this approach the backend uses Jackson's `JsonNode` tree model, but Cassandra still stores a **plain string**.
+
+### Saving Data
+
+1. The application receives an `EventRecord` object or JSON payload.
+2. Jackson converts it into a `JsonNode`.
+3. The `JsonNode` is serialized into a JSON string.
+4. That JSON string is stored in a Cassandra `text` column.
+
+Flow:
+
+EventRecord / Incoming JSON  
+↓  
+Jackson converts to JsonNode  
+↓  
+JsonNode serialized to JSON string  
+↓  
+Stored in Cassandra TEXT column
 
 ### Retrieving Data
 
 1. The JSON string is retrieved from Cassandra.
-2. It is parsed into a `JsonNode`.
-3. Jackson converts the `JsonNode` back into an `EventRecord` object.
+2. Jackson parses it into a `JsonNode`.
+3. The `JsonNode` can either be:
+   - used directly for dynamic processing, or
+   - converted into an `EventRecord` POJO.
 
-This allows the application to store complex nested objects while keeping the Cassandra schema simple.
+This approach is useful when the structure may change or when partial JSON manipulation is needed before converting to POJOs.
+
+Important point: **Cassandra still stores only a string.**
+
+---
+
+## Scenario 3: Using Cassandra UDTs (Structured Storage)
+
+In this approach the nested objects are stored as **native Cassandra User Defined Types (UDTs)** instead of JSON strings.
+
+The Cassandra schema explicitly understands the structure of the data.
+
+### Example UDTs
+
+Based on the following Java classes:
+
+Metadata  
+Action  
+User  
+
+Sample Cassandra CQL to create the UDTs:
+```cql
+CREATE TYPE metadata_udt (
+key text,
+value text
+);
+
+CREATE TYPE action_udt (
+action_type text,
+description text
+);
+
+CREATE TYPE user_udt (
+user_id text,
+name text,
+role text
+);
+```
+
+### Table Definition
+```cql
+CREATE TABLE event_record (
+event_id text PRIMARY KEY,
+actor frozen<user_udt>,
+actions list<frozen<action_udt>>,
+metadata map<text, frozen<metadata_udt>>,
+created_at timestamp
+);
+```
+
+### Saving Data
+
+1. The application receives an `EventRecord` object.
+2. Spring Data Cassandra maps:
+   - `User` → `user_udt`
+   - `Action` → `action_udt`
+   - `Metadata` → `metadata_udt`
+3. Cassandra stores the structured data directly in UDT columns.
+
+Flow:
+
+EventRecord POJO  
+↓  
+Spring Data Cassandra Mapping  
+↓  
+Mapped to UDT columns  
+↓  
+Stored as structured Cassandra types
+
+### Retrieving Data
+
+1. Cassandra returns UDT values.
+2. Spring Data Cassandra automatically converts them back into:
+   - `User`
+   - `List<Action>`
+   - `Map<String, Metadata>`
+3. The application receives a fully reconstructed `EventRecord` POJO.
+
+This approach provides strong schema structure in Cassandra and avoids JSON serialization entirely.
 
 ---
 

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.sum.springboot_cassandra_v2.model.EventRecord;
 import com.sum.springboot_cassandra_v2.model.SessionEntityJsonNode;
 import com.sum.springboot_cassandra_v2.model.SessionEntityString;
+import com.sum.springboot_cassandra_v2.service.EventRecordUdtService;
 import com.sum.springboot_cassandra_v2.service.SessionEntityJsonNodeService;
 import com.sum.springboot_cassandra_v2.service.SessionEntityStringService;
 
@@ -23,6 +24,9 @@ public class EventController {
 
     @Autowired
     private SessionEntityJsonNodeService jsonNodeService;
+
+    @Autowired
+    private EventRecordUdtService eventRecordUdtService;
 
     @GetMapping("/events-string/{id}")
     private EventRecord getOneEventString(@PathVariable String id) {
@@ -42,5 +46,15 @@ public class EventController {
     @PostMapping("/events-jsonnode")
     private SessionEntityJsonNode saveEventJsonNode(@RequestBody EventRecord record) {
         return jsonNodeService.saveEntity(record);
+    }
+
+    @GetMapping("/events-udt/{id}")
+    private com.sum.springboot_cassandra_v2.model.udt.EventRecord getOneEventUdt(@PathVariable String id) {
+        return eventRecordUdtService.findEntity(id).orElse(null);
+    }
+
+    @PostMapping("/events-udt")
+    private com.sum.springboot_cassandra_v2.model.udt.EventRecord saveEventUdt(@RequestBody com.sum.springboot_cassandra_v2.model.udt.EventRecord record) {
+        return eventRecordUdtService.saveEntity(record);
     }
 }
